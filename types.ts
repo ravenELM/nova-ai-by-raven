@@ -23,8 +23,9 @@ export interface ChatSession {
 }
 
 export enum ModelType {
-  FLASH = 'gemini-3-flash-preview',
-  PRO = 'gemini-3-pro-preview',
+  FLASH = 'gemini-2.5-flash',           // Basic/free mode
+  PRO = 'gemini-3-pro-preview',         // Agent mode
+  NERD = 'gemini-2.0-flash-exp:free',   // Nerd mode - precise & analytical
 }
 
 export type Plan = 'free' | 'basic' | 'pro' | 'plus' | 'agent';

@@ -1,11 +1,33 @@
-import { GoogleGenAI } from "@google/genai";
 import { Message, ModelType, Attachment } from "../types";
 
-const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use Puter.js for free Gemini API access - no API key needed!
+// Models:
+// - gemini-2.5-flash (basic mode)
+// - gemini-3-pro-preview (agent mode)
+// - gemini-2.0-flash-exp:free (nerd mode - precise & analytical)
+// Image generation:
+// - gemini-2.5-flash-image-preview (Nano Banana - fast)
+// - gemini-3-pro-image-preview (Nano Banana Pro - high quality)
 
 // Helper to remove data URL prefix
 const stripBase64Prefix = (dataUrl: string) => {
     return dataUrl.split(',')[1] || dataUrl;
+};
+
+// Helper to convert base64 to File object for Puter.js
+const base64ToFile = (base64Data: string, mimeType: string, filename: string): File => {
+    const byteString = atob(stripBase64Prefix(base64Data));
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    return new File([ab], filename, { type: mimeType });
+};
+
+// Check if Puter.js is available
+const isPuterAvailable = (): boolean => {
+    return typeof window !== 'undefined' && (window as any).puter && (window as any).puter.ai;
 };
 
 export const streamChatResponse = async (
@@ -17,80 +39,61 @@ export const streamChatResponse = async (
   signal?: AbortSignal
 ) => {
   try {
-    const ai = getAiClient();
-    const baseInstruction = `You are a helpful, intelligent AI assistant named Gemini. The user's name is ${userName}. Address them by name occasionally where appropriate.`;
+    if (!isPuterAvailable()) {
+      throw new Error("Puter.js is not available. Please check your internet connection.");
+    }
+
+    const puter = (window as any).puter;
+    
+    // Build system instruction
+    const baseInstruction = `You are a helpful, intelligent AI assistant named Nova. The user's name is ${userName}. Address them by name occasionally where appropriate.`;
     const finalSystemInstruction = systemInstructionText 
         ? `${baseInstruction}\n\nUser Custom Instructions:\n${systemInstructionText}`
         : baseInstruction;
 
-    // Map history to API format
-    const historyParts = messages.slice(0, -1).map(m => {
-        const parts: any[] = [];
-        
-        if (m.attachments && m.attachments.length > 0) {
-            m.attachments.forEach(att => {
-                parts.push({
-                    inlineData: {
-                        mimeType: att.mimeType,
-                        data: stripBase64Prefix(att.data)
-                    }
-                });
-            });
-        }
-        
-        if (m.content) {
-            parts.push({ text: m.content });
-        }
-
-        return {
-            role: m.role,
-            parts: parts
-        };
-    });
-
-    const chat = ai.chats.create({
-      model: model,
-      config: {
-        systemInstruction: finalSystemInstruction,
-      },
-      history: historyParts,
-    });
-
+    // Get the last message
     const lastMessage = messages[messages.length - 1];
     
-    // Construct the final message content
-    const messageParts: any[] = [];
+    // Build conversation history for context
+    const conversationHistory = messages.slice(0, -1).map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+    }));
+
+    // Build the current message content
+    let messageContent: any = lastMessage.content || '';
+    let imageUrl: string | undefined;
+
+    // Handle image attachments
     if (lastMessage.attachments && lastMessage.attachments.length > 0) {
-        lastMessage.attachments.forEach(att => {
-            messageParts.push({
-                inlineData: {
-                    mimeType: att.mimeType,
-                    data: stripBase64Prefix(att.data)
-                }
-            });
-        });
-    }
-    if (lastMessage.content) {
-        messageParts.push({ text: lastMessage.content });
+        const imageAttachment = lastMessage.attachments.find(att => att.type === 'image');
+        if (imageAttachment) {
+            imageUrl = imageAttachment.data; // Base64 data URL
+        }
     }
 
-    const result = await chat.sendMessageStream({
-      message: messageParts,
+    // Call Puter.js AI chat with streaming
+    const response = await puter.ai.chat(messageContent, {
+        model: model,
+        stream: true,
+        systemMessage: finalSystemInstruction
     });
 
-    for await (const chunk of result) {
-      if (signal?.aborted) {
-          break;
-      }
-      if (chunk.text) {
-        onChunk(chunk.text);
-      }
+    // Handle streaming response
+    for await (const part of response) {
+        if (signal?.aborted) {
+            break;
+        }
+        if (part?.text) {
+            onChunk(part.text);
+        }
     }
+
   } catch (error: any) {
     if (signal?.aborted) return;
-    console.error("Error calling Gemini API:", error);
+    console.error("Error calling Puter.js AI:", error);
     
-    let errorMessage = "\n\n[Error: Unable to get response from Gemini API. Please check your connection and API key.]";
+    let errorMessage = "\n\n[Error: Unable to get response. Please check your connection.]";
 
     // Handle Rate Limits / Quota Issues
     if (
@@ -107,73 +110,42 @@ export const streamChatResponse = async (
 };
 
 export const generateImage = async (prompt: string, modelType: ModelType): Promise<Attachment | null> => {
-    // 1. Determine Model Logic
-    // Flash -> gemini-2.5-flash-image (Nano Banana)
-    // Pro -> gemini-3-pro-image-preview (Nano Banana Pro)
-    let modelName = 'gemini-2.5-flash-image';
-    
-    if (modelType === ModelType.PRO) {
-        modelName = 'gemini-3-pro-image-preview';
-
-        // 2. Pro model requires User API Key selection check
-        if (typeof window !== 'undefined' && (window as any).aistudio) {
-            try {
-                const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-                if (!hasKey) {
-                    const success = await (window as any).aistudio.openSelectKey();
-                    if (!success) {
-                        throw new Error("API Key selection is required for high-quality image generation.");
-                    }
-                }
-            } catch (e) {
-                console.error("Error checking API key:", e);
-                // Fallback or proceed if environment is different (e.g. dev)
-            }
-        }
-    }
-
-    // 3. Create fresh client instance just before call
-    const ai = getAiClient();
-
-    // Configure image options based on model
-    const imageConfig: any = {
-        aspectRatio: "1:1"
-    };
-    
-    // imageSize is only supported by the Pro model
-    if (modelName === 'gemini-3-pro-image-preview') {
-        imageConfig.imageSize = "1K";
-    }
-
     try {
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: {
-                parts: [{ text: prompt }]
-            },
-            config: {
-                imageConfig
-            }
+        if (!isPuterAvailable()) {
+            throw new Error("Puter.js is not available.");
+        }
+
+        const puter = (window as any).puter;
+        
+        // Determine Model Logic using Puter.js Nano Banana models
+        // Flash -> gemini-2.5-flash-image-preview (Nano Banana - fast)
+        // Pro -> gemini-3-pro-image-preview (Nano Banana Pro - high quality)
+        let modelName = 'gemini-2.5-flash-image-preview';
+        
+        if (modelType === ModelType.PRO) {
+            modelName = 'gemini-3-pro-image-preview';
+        }
+
+        // Generate image using Puter.js
+        const imageElement = await puter.ai.txt2img(prompt, {
+            model: modelName
         });
 
-        // 4. Extract Image from Response
-        if (response.candidates?.[0]?.content?.parts) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    return {
-                        type: 'image',
-                        mimeType: part.inlineData.mimeType || 'image/png',
-                        data: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
-                        name: 'Generated Image'
-                    };
-                }
-            }
+        // Convert the returned image element to base64 data
+        if (imageElement && imageElement.src) {
+            return {
+                type: 'image',
+                mimeType: 'image/png',
+                data: imageElement.src, // Puter returns data URL
+                name: 'Generated Image'
+            };
         }
+        
         return null;
 
     } catch (error: any) {
         console.error("Image generation error:", error);
-         if (
+        if (
             error?.status === 429 || 
             error?.status === 'RESOURCE_EXHAUSTED' || 
             error?.message?.includes('quota') ||
