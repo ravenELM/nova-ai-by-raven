@@ -36,7 +36,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
           const { error } = await supabase.auth.signInWithOAuth({
               provider: 'google',
               options: {
-                  redirectTo: window.location.origin
+                  redirectTo: 'https://nova-ai-jla6.onrender.com'
               }
           });
           if (error) throw error;
