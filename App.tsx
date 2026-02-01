@@ -389,15 +389,7 @@ function App() {
       }
   }
 
-  // Show loading spinner only briefly, then show auth page or main app
-  if (isLoading) {
-      return (
-          <div className="min-h-screen bg-[#171717] text-white flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          </div>
-      );
-  }
-
+  // Skip loading screen - show auth page immediately while checking session in background
   if (!user) {
       return <AuthPage onLogin={setUser} />;
   }
