@@ -1,0 +1,7 @@
+{
+  "name": "Nova AI",
+  "description": "A AI named Nova AI\n",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
