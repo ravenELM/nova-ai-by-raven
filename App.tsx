@@ -434,7 +434,9 @@ function App() {
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-lg font-medium text-gray-300 hover:bg-gray-800 transition-colors"
                     >
                         <span className="text-gray-200">Gemini</span>
-                        <span className="opacity-60 text-base">{model === ModelType.FLASH ? 'Free' : 'Agent'}</span>
+                        <span className="opacity-60 text-base">
+                            {model === ModelType.FLASH ? 'Free' : model === ModelType.NERD ? 'Nerd' : 'Agent'}
+                        </span>
                          <ChevronDown size={16} className="text-gray-500 mt-1" />
                     </button>
                     {/* Dropdown */}
@@ -456,6 +458,23 @@ function App() {
                                      </div>
                                  </div>
                                  {model === ModelType.FLASH && <Check size={16} />}
+                             </button>
+
+                             {/* Nerd Mode (Flash Exp) */}
+                             <button 
+                                onClick={() => handleModelChange(ModelType.NERD)} 
+                                className={`flex items-center justify-between p-3 rounded-lg hover:bg-gray-700 text-left ${model === ModelType.NERD ? 'bg-gray-700' : ''}`}
+                             >
+                                 <div className="flex items-center gap-3">
+                                     <div className="p-2 rounded border border-blue-500/30 bg-blue-500/10 text-blue-400">
+                                         <Zap size={16} />
+                                     </div>
+                                     <div className="flex flex-col">
+                                         <span className="font-medium text-sm">Nerd</span>
+                                         <span className="text-xs text-gray-400">Precise & analytical reasoning</span>
+                                     </div>
+                                 </div>
+                                 {model === ModelType.NERD && <Check size={16} />}
                              </button>
 
                              {/* Agent Mode (Pro) */}
