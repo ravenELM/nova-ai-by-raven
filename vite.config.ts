@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
-        allowedHosts: ['nova-ai-jla6.onrender.com', 'localhost', '127.0.0.1'],
+        allowedHosts: ['nova-ai-by-raven-support.onrender.com', 'localhost', '127.0.0.1'],
       },
       plugins: [react()],
       define: {
