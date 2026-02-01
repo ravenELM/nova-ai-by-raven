@@ -159,12 +159,18 @@ export const generateImage = async (prompt: string, modelType: ModelType): Promi
 
 export const generateTitle = async (firstMessage: string): Promise<string> => {
     try {
-        const ai = getAiClient();
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a very short, concise title (max 4 words) for a chat that starts with: "${firstMessage}". Do not use quotes.`,
-        });
-        return response.text?.trim() || "New Chat";
+        if (!isPuterAvailable()) {
+            return "New Chat";
+        }
+
+        const puter = (window as any).puter;
+        const response = await puter.ai.chat(
+            `Generate a very short, concise title (max 4 words) for a chat that starts with: "${firstMessage}". Do not use quotes.`,
+            {
+                model: 'gemini-2.5-flash',
+            }
+        );
+        return response?.trim() || "New Chat";
     } catch (e) {
         return "New Chat";
     }
